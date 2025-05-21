@@ -2,11 +2,15 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Networking;
 using UnityEngine.Video;
 
 public class GameManager : MonoBehaviour
 {
+    [Header("Loading")]
+    public GameObject loadingCanvas;
+
     [Header("Referência da esfera (material com shader 360)")]
     public Renderer sphereRenderer; 
     
@@ -17,19 +21,20 @@ public class GameManager : MonoBehaviour
 
     [Header("URLs remotas das imagens (opcional)")]
     private string remoteImageURL = "https://i.postimg.cc/qBt50DCM/";
-    private string imageName = "teste-360-";
+    private string imageName = "cena";
 
     private List<Texture2D> loadedTextures = new List<Texture2D>();
 
     private int currentIndex = 0;
     private XRControls controls;
     private bool canNavigate = true;
-    private int startImage = 2;//mudar para o numero da primeira imagem depois
-    private int numImages = 2;//mudar para o 6 depois
+    private int startImage = 1;//mudar para o numero da primeira imagem depois
+    private int numImages = 5;//mudar para o 6 depois
     private bool loadWeb = false;
 
     void Start()
     {
+        loadingCanvas.SetActive(true);
         StartCoroutine(TryLoadRemoteThenFallbackImages());
 
         videoPlayer.isLooping = true;
@@ -82,12 +87,12 @@ public class GameManager : MonoBehaviour
                 {
                     Texture2D tex = DownloadHandlerTexture.GetContent(request);
                     loadedTextures.Add(tex);
-                    Debug.Log($"Imagem remota carregada: {remoteImageURL}{i}.jpg");
+                    Debug.Log($"GameManager - Imagem remota carregada: {remoteImageURL}{i}.jpg");
                     loadedAny = true;
                 }
                 else
                 {
-                    Debug.LogWarning($"Falha ao carregar imagem remota: {remoteImageURL}{imageName}{i}.jpg | Erro: {request.error}");
+                    Debug.LogWarning($"GameManager - Falha ao carregar imagem remota: {remoteImageURL}{imageName}{i}.jpg | Erro: {request.error}");
                 }
             }
         }
@@ -95,9 +100,11 @@ public class GameManager : MonoBehaviour
         // Se não conseguiu nenhuma, tenta local
         if (!loadedAny)
         {
-            Debug.Log("Nenhuma imagem remota carregada. Tentando carregar localmente...");
+            Debug.Log("GameManager - Nenhuma imagem remota carregada. Tentando carregar localmente...");
             yield return StartCoroutine(LoadAllImagesFromStreamingAssets());
         }
+
+        loadingCanvas.SetActive(false);
 
         // Aplica a primeira imagem, se houver
         if (loadedTextures.Count > 0)
@@ -106,7 +113,7 @@ public class GameManager : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("Nenhuma imagem foi carregada (remota ou local).");
+            Debug.LogWarning("GameManager - Nenhuma imagem foi carregada (remota ou local).");
         }
     }
 
@@ -129,11 +136,11 @@ public class GameManager : MonoBehaviour
             {
                 Texture2D tex = DownloadHandlerTexture.GetContent(request);
                 loadedTextures.Add(tex);
-                Debug.Log("Imagem carregada (Android): " + $"{imageName}{i}.jpg");
+                Debug.Log("GameManager - Imagem carregada (Android): " + $"{imageName}{i}.jpg");
             }
             else
             {
-                Debug.LogWarning("Erro ao carregar imagem no Android: " + fullPath + "\n" + request.error);
+                Debug.LogWarning("GameManager - Erro ao carregar imagem no Android: " + fullPath + "\n" + request.error);
             }
         }
     }
@@ -155,11 +162,11 @@ public class GameManager : MonoBehaviour
                     {
                         Texture2D tex = DownloadHandlerTexture.GetContent(request);
                         loadedTextures.Add(tex);
-                        Debug.Log("Imagem carregada (Editor/PC): " + filePath);
+                        Debug.Log("GameManager - Imagem carregada (Editor/PC): " + filePath);
                     }
                     else
                     {
-                        Debug.LogWarning("Erro ao carregar imagem local: " + filePath + "\n" + request.error);
+                        Debug.LogWarning("GameManager - Erro ao carregar imagem local: " + filePath + "\n" + request.error);
                     }
                 }
             }
@@ -189,20 +196,7 @@ public class GameManager : MonoBehaviour
     {
         if (index == 0)
         {
-            // Mostrar o vídeo
-            if (videoPlane != null)
-            {
-                videoPlane.SetActive(true);
-            }
-
-            if (sphereRenderer != null)
-            {
-                sphereRenderer.enabled = false; // Esconde a esfera
-            }
-
-            videoPlayer.frame = 0;
-            videoPlayer.Play();
-            Debug.Log("GameManager - Exibindo vídeo no plano");
+            StartCoroutine(PlayVideoClean());
         }
         else
         {
@@ -233,15 +227,38 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private IEnumerator PlayVideoClean()
+    {
+        if (videoPlane != null)
+            videoPlane.SetActive(false); // Esconde o plano do vídeo antes de resetar
+
+        if (sphereRenderer != null)
+            sphereRenderer.enabled = false;
+
+        videoPlayer.frame = 0;
+
+        yield return null; // Espera 1 frame
+
+        videoPlayer.Play();
+
+        while (videoPlayer.frame <= 0)
+            yield return null;
+
+        if (videoPlane != null)
+            videoPlane.SetActive(true); // Agora sim mostra o plano
+
+        Debug.Log("GameManager - Exibindo vídeo no plano");
+    }
+
     private void Update()
     {
-        if (controls.Gameplay.ButtonA.WasPressedThisFrame())
+        if (controls.Gameplay.ButtonA.WasPressedThisFrame() || Keyboard.current[Key.A].wasPressedThisFrame)
         {
             Debug.Log("GameManager - Botão A pressionado");
             NextImage();
         }
 
-        if (controls.Gameplay.ButtonB.WasPressedThisFrame())
+        if (controls.Gameplay.ButtonB.WasPressedThisFrame() || Keyboard.current[Key.B].wasPressedThisFrame)
         {
             Debug.Log("GameManager - Botão B pressionado");
             PreviousImage();
